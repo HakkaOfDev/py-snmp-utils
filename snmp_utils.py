@@ -1,94 +1,105 @@
-import json
-from types import SimpleNamespace
-
-from pysnmp.entity.engine import SnmpEngine
 from pysnmp.entity.rfc3413.oneliner import cmdgen
-from pysnmp.hlapi import nextCmd, CommunityData, UdpTransportTarget, ContextData
-from pysnmp.smi.rfc1902 import ObjectType, ObjectIdentity
+from snmp_cmds import Session, SNMPTimeout
 
-PATH_TO_LIST = "./OIDS.json"
 
 class SnmpUtils:
     """
-    SNMP Utils Class for walk/bulk/set more easily in python.
+    SNMP Utils Class for walk/bulk/get/set/table more easily in python.
     @author: HakkaOfDev
-    @version: 1.0.0
+    @version: 1.0.1
     """
 
-    def __init__(self, host, port=161, community="public"):
+    def __init__(self, host: str, port: int = 161, read_community: str = "public", write_community: str = "private",
+                 timeout: int = 1):
+        """
+        Default constructor
+        :param host: IP of device
+        :param port: PORT of SNMP Agent
+        :param read_community: Community for read oids
+        :param write_community: Community for write (set)
+        :param timeout: Timeout for a request
+        """
         self.host = host
         self.port = port
-        self.community = community
-        self.defineOIDsList()
+        self.read_community = read_community
+        self.write_community = write_community
+        self.timeout = timeout
+        self.session = Session(ipaddress=host, port=port, read_community=read_community,
+                               write_community=write_community,
+                               timeout=timeout)
 
-    def defineOIDsList(self):
-        with open(PATH_TO_LIST, ) as file:
-            self.oids = json.loads(file.read().replace('\n', ''), object_hook=lambda d: SimpleNamespace(**d))
-
-    def get(self, oid):
-        return list(self.walk(oid, 1).values())[-1]
-
-    def getByID(self, oid, id):
-        return list(self.walk(oid + "." + str(id), 1).values())[-1]
-
-    def isConnected(self):
+    def is_online(self):
+        """
+        Check if a device is online
+        :return: boolean
+        """
         try:
-            self.find("1.3.6.1")
+            self.get('1.3.6.1.2.1.1.5')
             return True
-        except:
+        except SNMPTimeout as exception:
+            print(exception.message)
             return False
 
-    def bulk(self, *oids_list):
+    def set(self, oid: str, value_type: str, value: str):
+        """
+        Set value of oid
+        :param oid:
+        :param value_type: can be one of i/u/t/a/o/s/x/d/b
+        :param value:
+        """
+        self.session.set(oid=oid, value_type=value_type, value=value)
+
+    def get(self, oid: str):
+        """
+        Get a specific value from an oid
+        :param oid:
+        :return: str: value
+        """
+        return self.session.walk(oid=oid)[0][-1]
+
+    def get_by_id(self, oid: str, ID: int = 0):
+        """
+        Get a specific value from an oid with a specific id
+        :param oid:
+        :param ID:
+        :return: str: value
+        """
+        return self.get(oid=f"{oid}.{ID}")
+
+    def get_table(self, oid: str, sort_key: str = None):
+        """
+        Get a SNMP table
+        :param oid:
+        :param sort_key:
+        :return: list of dicts
+        """
+        return self.session.get_table(oid=oid, sortkey=sort_key)
+
+    def walk(self, oid: str):
+        """
+        Walk command for SNMP
+        :param oid:
+        :return: dict
+        """
+        return dict(self.session.walk(oid=oid))
+
+    def bulk(self, *OIDS_list: list):
+        """
+        Bulk command for SNMP
+        :param OIDS_list: list of oids
+        :return: dict
+        """
         errorIndication, errorStatus, errorIndex, snmpDataTable = cmdgen.CommandGenerator().bulkCmd(
-            cmdgen.CommunityData(self.community),
+            cmdgen.CommunityData(self.read_community),
             cmdgen.UdpTransportTarget((self.host, self.port)),
             0, 25,
-            *oids_list,
+            *OIDS_list,
+            lexicographicMode=False
         )
 
+        results = {}
         if not errorIndication and not errorStatus:
-            results = {}
             for snmpDataTableRow in snmpDataTable:
                 for name, val in snmpDataTableRow:
                     results[str(name)] = str(snmpDataTableRow[0]).split(" = ")[1]
-
-            return results
-        return None
-
-    def set(self, oid, value):
-        errorIndication, errorStatus, errorIndex, snmpData = cmdgen.CommandGenerator().setCmd(
-            cmdgen.CommunityData(self.community),
-            cmdgen.UdpTransportTarget((self.host, self.port)),
-            (ObjectType(ObjectIdentity(oid)), value)
-        )
-        if errorIndication:
-            print(errorIndication)
-        elif errorStatus:
-            print('%s at %s' % (
-                errorStatus.prettyPrint(),
-                errorIndex and snmpData[int(errorIndex) - 1][0] or '?'
-            ))
-
-    def walk(self, oid, n=0, dotPrefix=False):
-        if dotPrefix:
-            oid = "." + oid
-
-        results = {}
-        i = 0
-        for (errorIndication, errorStatus, errorIndex, snmpData) in nextCmd(SnmpEngine(),
-                                                                            CommunityData(self.community),
-                                                                            UdpTransportTarget((self.host, self.port)),
-                                                                            ContextData(),
-                                                                            ObjectType(ObjectIdentity(oid))):
-            if not errorIndication and not errorStatus:
-                for data in snmpData:
-                    if n == 0:
-                        results[str(data[0].__str__).split("payload [")[1][:-4]] = \
-                            str(data[1].__str__).split("payload [")[1][:-3]
-                    elif n != i:
-                        results[str(data[0].__str__).split("payload [")[1][:-4]] = \
-                            str(data[1].__str__).split("payload [")[1][:-3]
-                        i += 1
-                    else:
-                        return results
-        return None
+        return results
