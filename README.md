@@ -4,40 +4,23 @@
 [![foryou](https://img.shields.io/static/v1?label=For&message=You&color=aqua&labelColor=blue&style=for-the-badge)]()
 [![license](https://img.shields.io/static/v1?label=License&message=OPENSOURCE&color=green&labelColor=darkgreen&style=for-the-badge)]()
 <br><br>
-An opensource library to use SNMP get/bulk/set/walk in Python
+An opensource library to use SNMP get/set/bulk/walk/table more easily in Python
 
 ## Features
-
-* Work with OIDS json list [Find Here](#OIDS List)
 * [GET](#GET) command
 * [SET](#SET) command
 * [WALK](#WALK) command
 * [BULK](#BULK) command
-* [CHECK IF DEVICE CONNECTED](#CHECK)
+* [TABLE](#TABLE) command
+* [CHECK IF DEVICE IS ONLINE](#CHECK)
 
-## OIDS List
+## Link with oids.json
 
-Change `PATH_TO_LIST` to your OIDS list if you want to use it.
-
-Example for `OIDS.json`
-
-```
-{
-    "system": {
-        "name": "1.3.6.1.2.1.1.5",
-        "uptime": "1.3.6.1.2.1.1.3",
-        "mac_address": "1.3.6.1.2.1.2.2.1.6",
-        "temperature": "1.3.6.1.4.1.6296.9.1.1.2.5.1.3"
-    }
-}
-```
-
-When constructor `SnmpUtils()` is called, the method `defineOIDsList()` is automaticaly called. So you can use the list
-like this:
-
-```
-switch = SnmpUtils("10.0.0.1")
-print(switch.oids.system.name) #return 1.3.6.1.2.1.1.5
+```python
+import json
+oids = None
+with open('OIDS.json', 'r') as file:
+    oids = json.load(file)
 ```
 
 ## GET
@@ -45,40 +28,37 @@ print(switch.oids.system.name) #return 1.3.6.1.2.1.1.5
 GET SNMP Command return the value of a specific OID. \
 `get(oid)`
 
-```
+```python
 switch = SnmpUtils("10.0.0.1")
-switch_name = switch.get(switch.oids.system.name)
+switch_name = switch.get(oids['system']['name']) # return name of device
 ```
 
-You can also use `getByID(oid, id)` which returns the value of the inferior OID.
+You can also use `get_by_id(oid, id)` which returns the value of the inferior OID.
 
-```
+```python
 switch = SnmpUtils("10.0.0.1")
-switch_interface_3_description = switch.getByID(switch.oids.interfaces.description, 3) # return the description of the third interface
+switch_interface_3_description = switch.get_by_id(oids['interfaces']['description'], 3) # return the description of the third interface
 ```
 
 ## SET
 
 SET SNMP is use for set value of a specific OID. \
-`set(oid, value)`
-
-```
+`set(oid, value_type, value)` \
+*value_type can be one of i/u/t/a/o/s/x/d/b*
+```python
 switch = SnmpUtils("10.0.0.1")
-switch_name = switch.set(switch.oids.system.name, "Test")
+switch_name = switch.set(oids['system']['name'], 's', "Test")
 ```
 
 ## WALK
 
 WALK SNMP Command return a dict of all values of inferiors OIDs. \
-`walk(oid, numberOfIterations, dotPrefix)`
-
-You can specify the number of value do you want in second parameter.
-`dotPrefix` is used for add . in front of OID.
+`walk(oid)`
 
 ```
 switch = SnmpUtils("10.0.0.1")
-switch_10_interfaces_description = switch.walk(switch.oids.interfaces.description, 10) # return a dict with key/value
-for k,v in switch_10_interfaces_description.items():
+switch_interfaces_description = switch.walk(oids['interfaces']['description']) # return a dict with key/value
+for k,v in switch_interfaces_description.items():
     print(k,v)
 ```
 
@@ -89,23 +69,35 @@ BULK SNMP returns all following items up to a limit for an/several item(s). \
 
 ```
 switch = SnmpUtils("10.0.0.1")
-switch_interfaces_description = switch.bulk(switch.oids.interfaces.description) #return a dict with description for all interfaces
+switch_interfaces_description = switch.bulk(oids['interfaces']['description']) #return a dict with description for all interfaces
 ```
+
+## TABLE
+
+TABLE SNMP returns list of dicts \
+`get_table(oid, sort_key)`
+
+```
+switch = SnmpUtils("10.0.0.1")
+switch_interfaces = switch.get_table('1.3.6.1.2.1.2.2') # return list of dicts
+```
+
 
 ## CHECK
 
 You can easily check if a device is online \
-`isConnected()`
+`is_online()`
 
 ```
 switch = ("10.0.0.1")
-if switch.isConnected():
+if switch.is_online():
     print("Switch online")
 ```
 
 ## Dependencies
 
 * [PySNMP](https://pysnmp.readthedocs.io/en/latest/)
+* [SNMP-CMDS](https://snmp-cmds.readthedocs.io/en/latest/)
 
 ## Contributors
 
